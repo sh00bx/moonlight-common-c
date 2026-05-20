@@ -360,6 +360,14 @@ SOCKET bindUdpSocket(int addressFamily, struct sockaddr_storage* localAddr, SOCK
 #ifdef __3DS__
     if (bufferSize == 0 || bufferSize > n3ds_max_buf_size)
         bufferSize = n3ds_max_buf_size;
+#else
+    /* Apollo/Sunshine default to a 1 MiB UDP receive buffer for video; the
+     * step-down loop below will negotiate this back down if the OS caps lower
+     * (typical /proc/sys/net/core/rmem_max on stock kernels is 200 KiB–4 MiB).
+     * Skipped on 3DS where the buffer ceiling is much lower. */
+    if (bufferSize != 0 && bufferSize < (1 << 20)) {
+        bufferSize = 1 << 20;
+    }
 #endif
     if (bufferSize != 0) {
         // We start at the requested recv buffer value and step down until we find
@@ -596,6 +604,15 @@ int enableNoDelay(SOCKET s) {
     if (err == SOCKET_ERROR) {
         return LastSocketError();
     }
+
+#if defined(TCP_QUICKACK)
+    /* Suppress Linux's delayed-ACK on Control/Input TCP sockets. The flag is
+     * one-shot — the kernel may reset it after one ACK round — but one prompt
+     * ACK on every send is exactly what input wants. Best-effort: ignore
+     * failures. */
+    val = 1;
+    (void)setsockopt(s, IPPROTO_TCP, TCP_QUICKACK, (char*)&val, sizeof(val));
+#endif
 
     return 0;
 }
