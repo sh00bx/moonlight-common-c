@@ -614,6 +614,16 @@ int enableNoDelay(SOCKET s) {
     (void)setsockopt(s, IPPROTO_TCP, TCP_QUICKACK, (char*)&val, sizeof(val));
 #endif
 
+#if defined(TCP_USER_TIMEOUT)
+    /* Linux default is ~13 minutes before the kernel reports an unacked TCP
+     * segment dead. For interactive streaming we want failure detection in
+     * seconds, not minutes. 5000 ms is a reasonable middle ground: long
+     * enough to ride out a hiccup, short enough that 'connection lost' UI
+     * pops up quickly on a real network drop. Best-effort. */
+    val = 5000;
+    (void)setsockopt(s, IPPROTO_TCP, TCP_USER_TIMEOUT, (char*)&val, sizeof(val));
+#endif
+
     return 0;
 }
 
