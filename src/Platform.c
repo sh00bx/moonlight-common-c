@@ -3,11 +3,6 @@
 #if defined(__vita__)
 #include <pthread.h>
 #endif
-#if defined(__linux__) || defined(__FreeBSD__)
-#include <sched.h>
-#include <sys/resource.h>
-#include <string.h>
-#endif
 
 // The maximum amount of time before observing an interrupt
 // in PltSleepMsInterruptible().
@@ -84,18 +79,6 @@ void* ThreadProc(void* context) {
     setThreadNameWin32(ctx->name);
 #elif defined(__linux__) || defined(__FreeBSD__)
     pthread_setname_np(pthread_self(), ctx->name);
-    if (ctx->name && (
-            strcmp(ctx->name, "VideoRecv")   == 0 ||
-            strcmp(ctx->name, "VideoDec")    == 0 ||
-            strcmp(ctx->name, "AudioRecv")   == 0 ||
-            strcmp(ctx->name, "ControlRecv") == 0)) {
-        struct sched_param sp;
-        memset(&sp, 0, sizeof(sp));
-        sp.sched_priority = 20;
-        if (pthread_setschedparam(pthread_self(), SCHED_RR, &sp) != 0) {
-            (void)setpriority(PRIO_PROCESS, 0, -10);
-        }
-    }
 #elif defined(LC_DARWIN)
     pthread_setname_np(ctx->name);
 #endif
