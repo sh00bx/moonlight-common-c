@@ -361,12 +361,17 @@ SOCKET bindUdpSocket(int addressFamily, struct sockaddr_storage* localAddr, SOCK
     if (bufferSize == 0 || bufferSize > n3ds_max_buf_size)
         bufferSize = n3ds_max_buf_size;
 #else
-    /* Apollo/Sunshine default to a 1 MiB UDP receive buffer for video; the
-     * step-down loop below will negotiate this back down if the OS caps lower
-     * (typical /proc/sys/net/core/rmem_max on stock kernels is 200 KiB–4 MiB).
-     * Skipped on 3DS where the buffer ceiling is much lower. */
-    if (bufferSize != 0 && bufferSize < (1 << 20)) {
-        bufferSize = 1 << 20;
+    /* Bump UDP receive-buffer to 4 MiB by default. At 4K60 HEVC ~80 Mbps a
+     * single 60–100 ms WiFi burst is ~1 MB of in-flight payload; if the kernel
+     * caps SO_RCVBUF at the previous 1 MiB or worse, the socket overflows
+     * during the burst and we get packet loss → reassembly stalls (visible as
+     * arr-max spikes in the P20 pacing log). 4 MiB gives ~250 ms of headroom
+     * at 80 Mbps. The step-down loop below negotiates down on kernels where
+     * net.core.rmem_max is lower (webOS stock rmem_max is 512 KiB; bumping it
+     * to 4 MiB via `sysctl -w net.core.rmem_max=4194304` at boot is the
+     * complementary host-side change). Skipped on 3DS. */
+    if (bufferSize != 0 && bufferSize < (4 << 20)) {
+        bufferSize = 4 << 20;
     }
 #endif
     if (bufferSize != 0) {
