@@ -398,21 +398,25 @@ SOCKET bindUdpSocket(int addressFamily, struct sockaddr_storage* localAddr, SOCK
             }
         }
 
-#if defined(LC_DEBUG)
-        if (err == 0) {
-            Limelog("Selected receive buffer size: %d\n", bufferSize);
-        }
-        else {
-            Limelog("Unable to set receive buffer size: %d\n", LastSocketError());
-        }
-
+        // The kernel silently clamps SO_RCVBUF to net.core.rmem_max and STILL returns
+        // success, so the step-down loop above never fires on Linux/webOS: we request
+        // 4 MiB and quietly get whatever rmem_max permits (webOS stock rmem_max is
+        // 512 KiB, so the prior 1 MiB request and this 4 MiB request both land on the
+        // same clamped value — the bump alone changes nothing without the host-side
+        // `sysctl -w net.core.rmem_max=4194304` boot hook). Read the granted size back
+        // and log it UNCONDITIONALLY (not just LC_DEBUG): in a stripped release this is
+        // the only way to tell whether the clamp is in effect. Note: Linux reports ~2x
+        // the effective size via getsockopt (kernel bookkeeping overhead).
         {
-            SOCKADDR_LEN len = sizeof(bufferSize);
-            if (getsockopt(s, SOL_SOCKET, SO_RCVBUF, (char*)&bufferSize, &len) == 0) {
-                Limelog("Actual receive buffer size: %d\n", bufferSize);
+            int grantedBufferSize = 0;
+            SOCKADDR_LEN len = sizeof(grantedBufferSize);
+            if (err == 0 && getsockopt(s, SOL_SOCKET, SO_RCVBUF, (char*)&grantedBufferSize, &len) == 0) {
+                Limelog("UDP recv buffer: requested %d, granted %d bytes\n", bufferSize, grantedBufferSize);
+            }
+            else if (err != 0) {
+                Limelog("UDP recv buffer: set failed (%d)\n", LastSocketError());
             }
         }
-#endif
     }
 
     return s;
