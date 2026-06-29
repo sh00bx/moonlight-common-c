@@ -432,6 +432,13 @@ void connectionReceivedCompleteFrame(uint32_t frameIndex, bool frameIsLTR) {
     lastGoodFrame = frameIndex;
     intervalGoodFrameCount++;
 
+    // aurora 1.0.11 A/B: neuter the LTR-ACK. It is the prime suspect for the
+    // input-lag regression on the nanors build (RCA exonerated nanors/FEC,
+    // ms->us rename, and the input-batching rewrite). Our server (Vibepollo/
+    // NVENC) has no usable LTR path, so these reliable urgent-channel ACKs are
+    // inert-or-harmful for us. Keeps lastGoodFrame/intervalGoodFrameCount intact.
+    frameIsLTR = false;
+
     if (frameIsLTR && IS_SUNSHINE() && isReferenceFrameInvalidationEnabled()) {
         // Queue LTR frame ACK control message
         PQUEUED_REFERENCE_FRAME_CONTROL qfit;
