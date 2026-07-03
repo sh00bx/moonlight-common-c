@@ -1423,8 +1423,9 @@ int LiSendPenEvent(uint8_t eventType, uint8_t toolType, uint8_t penButtons,
     return err;
 }
 
-int LiSendControllerArrivalEvent(uint8_t controllerNumber, uint16_t activeGamepadMask, uint8_t type,
-                                 uint32_t supportedButtonFlags, uint16_t capabilities) {
+int LiSendControllerArrivalEventWithMetadata(uint8_t controllerNumber, uint16_t activeGamepadMask,
+                                             uint8_t type, uint32_t supportedButtonFlags, uint16_t capabilities,
+                                             const uint8_t *metadataBlob, uint16_t metadataBlobLen) {
     PPACKET_HOLDER holder;
     int err;
 
@@ -1432,31 +1433,33 @@ int LiSendControllerArrivalEvent(uint8_t controllerNumber, uint16_t activeGamepa
         return -2;
     }
 
-    // Sunshine supports up to 16 controllers
     controllerNumber %= MAX_GAMEPADS;
 
-    // Always set the older touchpad cap if we have dual touchpads
     if (capabilities & LI_CCAP_DUAL_TOUCHPAD) {
         capabilities |= LI_CCAP_TOUCHPAD;
     }
 
-    // The arrival event is only supported by Sunshine
     if (IS_SUNSHINE()) {
-        holder = allocatePacketHolder(0);
+        holder = allocatePacketHolder(metadataBlobLen);
         if (holder == NULL) {
             return -1;
         }
 
-        // Send each controller on a separate channel
         holder->channelId = CTRL_CHANNEL_GAMEPAD_BASE + controllerNumber;
         holder->enetPacketFlags = ENET_PACKET_FLAG_RELIABLE;
 
-        holder->packet.controllerArrival.header.size = BE32(sizeof(SS_CONTROLLER_ARRIVAL_PACKET) - sizeof(uint32_t));
+        uint32_t totalSize = sizeof(SS_CONTROLLER_ARRIVAL_PACKET) + metadataBlobLen;
+        holder->packet.controllerArrival.header.size = BE32(totalSize - sizeof(uint32_t));
         holder->packet.controllerArrival.header.magic = LE32(SS_CONTROLLER_ARRIVAL_MAGIC);
         holder->packet.controllerArrival.controllerNumber = controllerNumber;
         holder->packet.controllerArrival.type = type;
         holder->packet.controllerArrival.capabilities = LE16(capabilities);
         holder->packet.controllerArrival.supportedButtonFlags = LE32(supportedButtonFlags);
+
+        if (metadataBlob && metadataBlobLen > 0) {
+            memcpy((uint8_t *)&holder->packet.controllerArrival + sizeof(SS_CONTROLLER_ARRIVAL_PACKET),
+                   metadataBlob, metadataBlobLen);
+        }
 
         err = LbqOfferQueueItem(&packetQueue, holder, &holder->entry);
         if (err != LBQ_SUCCESS) {
@@ -1467,8 +1470,13 @@ int LiSendControllerArrivalEvent(uint8_t controllerNumber, uint16_t activeGamepa
         }
     }
 
-    // Send a MC event just in case the host software doesn't support arrival events.
     return LiSendMultiControllerEvent(controllerNumber, activeGamepadMask, 0, 0, 0, 0, 0, 0, 0);
+}
+
+int LiSendControllerArrivalEvent(uint8_t controllerNumber, uint16_t activeGamepadMask, uint8_t type,
+                                 uint32_t supportedButtonFlags, uint16_t capabilities) {
+    return LiSendControllerArrivalEventWithMetadata(controllerNumber, activeGamepadMask, type,
+                                                    supportedButtonFlags, capabilities, NULL, 0);
 }
 
 int LiSendControllerTouchEvent2(uint8_t controllerNumber, uint8_t eventType, uint8_t touchpadIndex, uint32_t pointerId, float x, float y, float pressure) {

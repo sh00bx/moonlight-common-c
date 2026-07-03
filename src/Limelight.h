@@ -792,8 +792,15 @@ int LiSendMultiControllerEvent(short controllerNumber, short activeGamepadMask,
 #define LI_CCAP_BATTERY_STATE   0x40 // Reports battery state via LiSendControllerBatteryEvent()
 #define LI_CCAP_RGB_LED         0x80 // Can set RGB LED state via ConnListenerSetControllerLED()
 #define LI_CCAP_DUAL_TOUCHPAD  0x100 // Reports touchpad events from 2 separate touchpads
+#define LI_CCAP_FIRMWARE_INFO  0x200 // Has firmware info available for passthrough
 int LiSendControllerArrivalEvent(uint8_t controllerNumber, uint16_t activeGamepadMask, uint8_t type,
                                  uint32_t supportedButtonFlags, uint16_t capabilities);
+
+#define LI_CTRL_META_TAG_FIRMWARE_INFO 0x01
+
+int LiSendControllerArrivalEventWithMetadata(uint8_t controllerNumber, uint16_t activeGamepadMask,
+                                             uint8_t type, uint32_t supportedButtonFlags, uint16_t capabilities,
+                                             const uint8_t *metadataBlob, uint16_t metadataBlobLen);
 
 // This function is similar to LiSendTouchEvent(), but the touch events are associated with a
 // touchpad device present on a game controller instead of a touchscreen.

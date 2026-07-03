@@ -163,6 +163,13 @@ typedef struct _SS_CONTROLLER_ARRIVAL_PACKET {
     uint32_t supportedButtonFlags;
 } SS_CONTROLLER_ARRIVAL_PACKET, *PSS_CONTROLLER_ARRIVAL_PACKET;
 
+// Controller metadata TLV entry, appended after the fixed arrival fields.
+typedef struct _SS_CONTROLLER_META_TLV {
+    uint8_t tag;
+    uint8_t reserved;
+    uint16_t length;
+} SS_CONTROLLER_META_TLV, *PSS_CONTROLLER_META_TLV;
+
 #define SS_CONTROLLER_TOUCH_MAGIC 0x55000005
 typedef struct _SS_CONTROLLER_TOUCH_PACKET {
     NV_INPUT_HEADER header;
