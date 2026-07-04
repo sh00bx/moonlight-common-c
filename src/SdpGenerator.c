@@ -209,13 +209,11 @@ static int addGen5Options(PSDP_OPTION* head) {
         // 1 data shard frame).
         err |= addAttributeString(head, "x-nv-vqos[0].fec.minRequiredFecPackets", "2");
 
-        // BLL-FEC: adaptive FEC ramping based on real-time loss and per-frame
-        // bitrate. The upstream comment ("worse performance during packet
-        // loss, fall back to legacy 20% FEC") was a legacy GFE 3.26
-        // observation — that implementation under-allocated parity shards for
-        // large frames. Apollo (Sunshine fork) and modern Sunshine both
-        // ramp BLL-FEC properly. We stream against Apollo here, so enable it.
-        err |= addAttributeString(head, "x-nv-vqos[0].bllFec.enable", "1");
+        // BLL-FEC is a GFE-only attribute: Sunshine-family hosts never parse
+        // it (verified against Apollo/Vibepollo source — fecPercentage comes
+        // from config, no bllFec handling anywhere), so "1" was a no-op and
+        // the rationale above it was wrong. Keep upstream's GFE-safe default.
+        err |= addAttributeString(head, "x-nv-vqos[0].bllFec.enable", "0");
     }
     else {
         // We want to use the new ENet connections for control and input
