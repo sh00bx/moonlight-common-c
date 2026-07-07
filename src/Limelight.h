@@ -95,13 +95,6 @@ typedef struct _STREAM_CONFIGURATION {
     // enabled.
     int encryptionFlags;
 
-    // If non-zero, the full user-specified bitrate is used for video on Sunshine
-    // hosts instead of reserving 20% of it for FEC, and the 100 Mbps GFE bitrate
-    // cap is not applied. Sunshine receives the configured bitrate separately and
-    // adjusts its FEC percentage dynamically, so no reserve is needed there.
-    // This field has no effect on GFE hosts.
-    int useFullBitrate;
-
     // AES encryption data for the remote input stream. This must be
     // the same as what was passed as rikey and rikeyid
     // in /launch and /resume requests.

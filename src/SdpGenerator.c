@@ -332,9 +332,9 @@ static PSDP_OPTION getAttributesList(char*urlSafeAddr) {
     err |= addAttributeString(&optionHead, "x-nv-video[0].timeoutLengthMs", "7000");
     err |= addAttributeString(&optionHead, "x-nv-video[0].framesWithInvalidRefThreshold", "0");
 
-    if (StreamConfig.useFullBitrate && IS_SUNSHINE()) {
-        // Sunshine receives the configured bitrate below and adjusts its FEC percentage
-        // dynamically, so the entire user-specified bitrate can be used for video.
+    if (IS_SUNSHINE()) {
+        /* Sunshine uses configuredBitrateKbps for the total stream budget and manages FEC
+         * on the host. Do not trim the SDP bitrate fields on Sunshine hosts. */
         adjustedBitrate = StreamConfig.bitrate;
     }
     else {
@@ -357,8 +357,7 @@ static PSDP_OPTION getAttributesList(char*urlSafeAddr) {
     // GFE currently imposes a limit of 100 Mbps for the video bitrate. It will automatically
     // impose that on maximumBitrateKbps but not on initialBitrateKbps. We will impose the cap
     // ourselves so initialBitrateKbps does not exceed maximumBitrateKbps.
-    // Sunshine has no such limit, so the cap is skipped in full bitrate mode.
-    if (!(StreamConfig.useFullBitrate && IS_SUNSHINE())) {
+    if (!IS_SUNSHINE()) {
         adjustedBitrate = adjustedBitrate > 100000 ? 100000 : adjustedBitrate;
     }
 
