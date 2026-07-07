@@ -332,8 +332,15 @@ static PSDP_OPTION getAttributesList(char*urlSafeAddr) {
     err |= addAttributeString(&optionHead, "x-nv-video[0].timeoutLengthMs", "7000");
     err |= addAttributeString(&optionHead, "x-nv-video[0].framesWithInvalidRefThreshold", "0");
 
-    // 20% of the video bitrate will added to the user-specified bitrate for FEC
-    adjustedBitrate = (int)(StreamConfig.bitrate * 0.80);
+    if (StreamConfig.useFullBitrate && IS_SUNSHINE()) {
+        // Sunshine receives the configured bitrate below and adjusts its FEC percentage
+        // dynamically, so the entire user-specified bitrate can be used for video.
+        adjustedBitrate = StreamConfig.bitrate;
+    }
+    else {
+        // 20% of the video bitrate will added to the user-specified bitrate for FEC
+        adjustedBitrate = (int)(StreamConfig.bitrate * 0.80);
+    }
 
     // Use more strict bitrate logic when streaming remotely. The theory here is that remote
     // streaming is much more bandwidth sensitive. Someone might select 5 Mbps because that's
@@ -350,7 +357,10 @@ static PSDP_OPTION getAttributesList(char*urlSafeAddr) {
     // GFE currently imposes a limit of 100 Mbps for the video bitrate. It will automatically
     // impose that on maximumBitrateKbps but not on initialBitrateKbps. We will impose the cap
     // ourselves so initialBitrateKbps does not exceed maximumBitrateKbps.
-    adjustedBitrate = adjustedBitrate > 100000 ? 100000 : adjustedBitrate;
+    // Sunshine has no such limit, so the cap is skipped in full bitrate mode.
+    if (!(StreamConfig.useFullBitrate && IS_SUNSHINE())) {
+        adjustedBitrate = adjustedBitrate > 100000 ? 100000 : adjustedBitrate;
+    }
 
     // We don't support dynamic bitrate scaling properly (it tends to bounce between min and max and never
     // settle on the optimal bitrate if it's somewhere in the middle), so we'll just latch the bitrate
