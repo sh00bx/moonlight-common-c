@@ -352,6 +352,14 @@ static PSDP_OPTION getAttributesList(char*urlSafeAddr) {
     // ourselves so initialBitrateKbps does not exceed maximumBitrateKbps.
     adjustedBitrate = adjustedBitrate > 100000 ? 100000 : adjustedBitrate;
 
+    // Sunshine manages its own dynamic FEC percentage and bitrate, so send it the FULL configured
+    // bitrate instead of the 80%-FEC-reserved, 100 Mbps-capped value GFE needs (ported from upstream
+    // aurora 0efdb0ea). NOTE: raises the requested min/max for Sunshine (e.g. 48->60 Mbps at a 60 Mbps
+    // config) = more WiFi airtime; watch BT coex / DS5 audio on the combo-chip setup.
+    if (IS_SUNSHINE()) {
+        adjustedBitrate = (int) StreamConfig.bitrate;
+    }
+
     // We don't support dynamic bitrate scaling properly (it tends to bounce between min and max and never
     // settle on the optimal bitrate if it's somewhere in the middle), so we'll just latch the bitrate
     // to the requested value.
