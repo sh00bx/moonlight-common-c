@@ -16,6 +16,12 @@ typedef struct _reed_solomon reed_solomon;
 // behind is a different sequence space, not a straggler.
 #define RTPQ_FOREIGN_SEQUENCE_DISTANCE 1024
 
+// How many consecutive packets a foreign sequence space must sustain before we adopt it.
+// When two senders interleave, adopting on the first packet makes us follow whichever
+// spoke last and resynchronize continuously; requiring a run means the space that is
+// actually carrying the stream wins. At 200 packets/s this is ~40 ms of evidence.
+#define RTPQ_FOREIGN_SEQUENCE_RUN 8
+
 #define RTPA_DATA_SHARDS 4
 #define RTPA_FEC_SHARDS 2
 #define RTPA_TOTAL_SHARDS (RTPA_DATA_SHARDS + RTPA_FEC_SHARDS)
@@ -75,6 +81,11 @@ typedef struct _RTP_AUDIO_QUEUE {
     // Last time a packet was handed to the caller, used to detect that our sequence
     // baseline has diverged from what the sender is actually transmitting.
     uint64_t lastDeliveredTimeUs;
+
+    // Run of consecutive packets seen from one foreign sequence space. Two senders
+    // interleaving would otherwise make us adopt whichever spoke last, over and over.
+    uint16_t foreignSequenceBase;
+    uint16_t foreignSequenceRun;
 
     RTP_AUDIO_STATS stats;
 } RTP_AUDIO_QUEUE, *PRTP_AUDIO_QUEUE;

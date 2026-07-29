@@ -305,27 +305,62 @@ static PRTPA_FEC_BLOCK getFecBlockForRtpPacket(PRTP_AUDIO_QUEUE queue, PRTP_PACK
         // which silences audio for minutes at a time. Bound that: once we've gone quiet
         // while packets from a clearly different sequence space keep arriving, adopt theirs.
         uint16_t behindBy = queue->oldestRtpBaseSequenceNumber - fecBlockBaseSeqNum;
+
+        // Track how long one foreign space sustains itself. Adopting on the first packet
+        // makes two interleaving senders ping-pong the baseline: we adopt A, B's next
+        // packet looks stale, we go quiet and adopt B, and so on. Only a space that keeps
+        // talking is the one carrying the stream.
+        if (queue->foreignSequenceRun != 0 &&
+            (uint16_t)(fecBlockBaseSeqNum - queue->foreignSequenceBase) < RTPQ_FOREIGN_SEQUENCE_DISTANCE) {
+            if (queue->foreignSequenceRun < UINT16_MAX) {
+                queue->foreignSequenceRun++;
+            }
+        }
+        else {
+            queue->foreignSequenceBase = fecBlockBaseSeqNum;
+            queue->foreignSequenceRun = 1;
+        }
+
         if (!queue->synchronizing && queue->lastDeliveredTimeUs != 0 &&
             behindBy > RTPQ_FOREIGN_SEQUENCE_DISTANCE &&
+            queue->foreignSequenceRun >= RTPQ_FOREIGN_SEQUENCE_RUN &&
             PltGetMicroseconds() - queue->lastDeliveredTimeUs > RTPQ_STALE_RESYNC_TIMEOUT_MS * 1000) {
-            Limelog("Audio sequence space changed (got %u, baseline %u) - resynchronizing\n",
-                    fecBlockBaseSeqNum, queue->oldestRtpBaseSequenceNumber);
-
             // Drop everything queued against the old baseline before adopting the new one,
             // otherwise the queue invariants (blocks ordered after oldestRtpBaseSequenceNumber)
-            // no longer hold.
+            // no longer hold. Those shards are audio we received and never played, so count
+            // them - it is the only measure of what a resync costs.
+            // NB: freeFecBlockHead() advances oldestRtpBaseSequenceNumber, so the baseline has
+            // to be captured before the loop to stay meaningful in the log.
+            uint16_t oldBaseline = queue->oldestRtpBaseSequenceNumber;
+            uint32_t discardedShards = 0;
             while (queue->blockHead != NULL) {
+                discardedShards += queue->blockHead->dataShardsReceived;
                 freeFecBlockHead(queue);
             }
 
+            Limelog("Audio sequence space changed (got %u, baseline %u, sustained %u packets) - "
+                    "resynchronizing, discarding %u queued shards\n",
+                    fecBlockBaseSeqNum, oldBaseline,
+                    queue->foreignSequenceRun, discardedShards);
+
             queue->nextRtpSequenceNumber = queue->oldestRtpBaseSequenceNumber = fecBlockBaseSeqNum;
-            queue->receivedOosData = false;
             queue->lastDeliveredTimeUs = PltGetMicroseconds();
+            queue->foreignSequenceRun = 0;
+
+            // NB: receivedOosData is deliberately left as it was. Clearing it sends
+            // handleMissingPackets() down its "this host never reorders" path, which gives up
+            // on the first incomplete block the moment a second one queues instead of waiting
+            // out the OOS window - measured as a FEC give-up 4 ms after a resync holding only
+            // 2 of 4 shards. What we learned about this host's reordering still applies after
+            // the sequence numbering changes.
         }
         else {
             return NULL;
         }
     }
+
+    // In-sequence traffic means any foreign-space run we were tracking has ended.
+    queue->foreignSequenceRun = 0;
 
     // Look for an existing FEC block
     PRTPA_FEC_BLOCK existingBlock = queue->blockHead;
