@@ -298,7 +298,33 @@ static PRTPA_FEC_BLOCK getFecBlockForRtpPacket(PRTP_AUDIO_QUEUE queue, PRTP_PACK
 
     // Drop packets from FEC blocks that have already been completed
     if (isBefore16(fecBlockBaseSeqNum, queue->oldestRtpBaseSequenceNumber)) {
-        return NULL;
+        // A single packet from a foreign sequence space (a host-side stream restart, or a
+        // stale session still transmitting to our port) drags the baseline to its numbering.
+        // Every packet the real sender produces then looks stale here and is dropped until
+        // its 16-bit sequence number wraps all the way around to meet the baseline again -
+        // which silences audio for minutes at a time. Bound that: once we've gone quiet
+        // while packets from a clearly different sequence space keep arriving, adopt theirs.
+        uint16_t behindBy = queue->oldestRtpBaseSequenceNumber - fecBlockBaseSeqNum;
+        if (!queue->synchronizing && queue->lastDeliveredTimeUs != 0 &&
+            behindBy > RTPQ_FOREIGN_SEQUENCE_DISTANCE &&
+            PltGetMicroseconds() - queue->lastDeliveredTimeUs > RTPQ_STALE_RESYNC_TIMEOUT_MS * 1000) {
+            Limelog("Audio sequence space changed (got %u, baseline %u) - resynchronizing\n",
+                    fecBlockBaseSeqNum, queue->oldestRtpBaseSequenceNumber);
+
+            // Drop everything queued against the old baseline before adopting the new one,
+            // otherwise the queue invariants (blocks ordered after oldestRtpBaseSequenceNumber)
+            // no longer hold.
+            while (queue->blockHead != NULL) {
+                freeFecBlockHead(queue);
+            }
+
+            queue->nextRtpSequenceNumber = queue->oldestRtpBaseSequenceNumber = fecBlockBaseSeqNum;
+            queue->receivedOosData = false;
+            queue->lastDeliveredTimeUs = PltGetMicroseconds();
+        }
+        else {
+            return NULL;
+        }
     }
 
     // Look for an existing FEC block
@@ -701,6 +727,7 @@ PRTP_PACKET RtpaGetQueuedPacket(PRTP_AUDIO_QUEUE queue, uint16_t customHeaderLen
         }
 
         if (lostPacket != NULL) {
+            queue->lastDeliveredTimeUs = PltGetMicroseconds();
             return lostPacket;
         }
     }
@@ -727,6 +754,7 @@ PRTP_PACKET RtpaGetQueuedPacket(PRTP_AUDIO_QUEUE queue, uint16_t customHeaderLen
             validateFecBlockState(queue);
         }
 
+        queue->lastDeliveredTimeUs = PltGetMicroseconds();
         return packet;
     }
 

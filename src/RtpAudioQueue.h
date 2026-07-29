@@ -8,6 +8,14 @@ typedef struct _reed_solomon reed_solomon;
 // after the entire FEC block should have been received
 #define RTPQ_OOS_WAIT_TIME_MS 10
 
+// If audio stops being delivered for this long while packets keep arriving that look
+// stale, the sender's sequence space no longer matches ours and we resynchronize to it.
+#define RTPQ_STALE_RESYNC_TIMEOUT_MS 200
+
+// A late packet trails our baseline by a handful of sequence numbers. Anything this far
+// behind is a different sequence space, not a straggler.
+#define RTPQ_FOREIGN_SEQUENCE_DISTANCE 1024
+
 #define RTPA_DATA_SHARDS 4
 #define RTPA_FEC_SHARDS 2
 #define RTPA_TOTAL_SHARDS (RTPA_DATA_SHARDS + RTPA_FEC_SHARDS)
@@ -63,6 +71,10 @@ typedef struct _RTP_AUDIO_QUEUE {
     bool receivedOosData;
     bool synchronizing;
     bool incompatibleServer;
+
+    // Last time a packet was handed to the caller, used to detect that our sequence
+    // baseline has diverged from what the sender is actually transmitting.
+    uint64_t lastDeliveredTimeUs;
 
     RTP_AUDIO_STATS stats;
 } RTP_AUDIO_QUEUE, *PRTP_AUDIO_QUEUE;
