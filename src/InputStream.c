@@ -1051,8 +1051,17 @@ static int sendControllerEventInternal(short controllerNumber, short activeGamep
 
         // If this new packet has different button flags, end the batch to ensure the
         // host receives the exact axis values present at the time of the button press.
+        //
+        // A different active gamepad mask ends it too. The mask is how a controller
+        // removal reaches the host: a packet without this pad's bit frees its virtual
+        // pad. Folding that packet into a following one that sets the bit again (a
+        // removal and a re-arrival sent back to back, e.g. to change the controller
+        // type) would rewrite the removal in place before the input thread sent it,
+        // so the host would never free the pad and would reject the new arrival for
+        // a slot that is still allocated.
         if (holder->packet.multiController.buttonFlags != LE16((short)buttonFlags) ||
-            holder->packet.multiController.buttonFlags2 != (IS_SUNSHINE() ? LE16((short)(buttonFlags >> 16)) : 0)) {
+            holder->packet.multiController.buttonFlags2 != (IS_SUNSHINE() ? LE16((short)(buttonFlags >> 16)) : 0) ||
+            holder->packet.multiController.activeGamepadMask != LE16(activeGamepadMask)) {
             // Pretend there wasn't a currently queued controller packet
             holder = NULL;
         }
